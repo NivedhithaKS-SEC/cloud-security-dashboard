@@ -30,10 +30,7 @@ A real-time AWS cloud security posture monitoring dashboard that detects and vis
 
 Live demo:https://cloud-security-dashboard.onrender.com/
 ```
-
-## What to Tell Recruiters
-
-> "I built a cloud security posture management dashboard that simulates AWS security monitoring. It checks IAM misconfigurations, S3 bucket exposure, security group rules, and displays a real-time threat feed — all mapped to CIS AWS Benchmark controls. Built with Python and Flask, deployed live on Render."
+"I built a cloud security posture management dashboard that simulates AWS security monitoring. It checks IAM misconfigurations, S3 bucket exposure, security group rules, and displays a real-time threat feed — all mapped to CIS AWS Benchmark controls. Built with Python and Flask, deployed live on Render."
 
 ## CIS AWS Benchmark Controls Covered
 - CIS 1.3 — Inactive credentials
