@@ -28,12 +28,7 @@ A real-time AWS cloud security posture monitoring dashboard that detects and vis
 - **Frontend**: Vanilla JS, CSS Grid, Google Fonts
 - **Deployment**: Render (free tier)
 
-## Run Locally
-
-```bash
-pip install flask
-python app.py
-# Open http://127.0.0.1:5000
+Live demo:https://cloud-security-dashboard.onrender.com/
 ```
 
 ## What to Tell Recruiters
