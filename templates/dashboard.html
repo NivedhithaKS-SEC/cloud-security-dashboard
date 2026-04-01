@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Security Dashboard — AWS Posture Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080c10;
+    --surface:  #0d1117;
+    --card:     #111820;
+    --border:   #1e2d3d;
+    --accent:   #00d4ff;
+    --accent2:  #00ff88;
+    --critical: #ff3b3b;
+    --high:     #ff8c00;
+    --medium:   #ffd600;
+    --low:      #00d4ff;
+    --resolved: #00ff88;
+    --text:     #c9d1d9;
+    --muted:    #58697a;
+    --mono:     'Share Tech Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Top bar ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,12,16,0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    border: 1.5px solid var(--accent);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 0.05em;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent2);
+    font-size: 11px;
+  }
+
+  .live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* ── Layout ── */
+  .main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px 32px 60px;
+  }
+
+  /* ── Section header ── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Summary cards ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 18px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.critical::before { background: var(--critical); }
+  .stat-card.high::before     { background: var(--high); }
+  .stat-card.medium::before   { background: var(--medium); }
+  .stat-card.low::before      { background: var(--low); }
+  .stat-card.resolved::before { background: var(--resolved); }
+  .stat-card.total::before    { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .stat-card.score::before    { background: linear-gradient(90deg, var(--critical), var(--high)); }
+
+  .stat-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .stat-card.critical .stat-value { color: var(--critical); }
+  .stat-card.high .stat-value     { color: var(--high); }
+  .stat-card.medium .stat-value   { color: var(--medium); }
+  .stat-card.low .stat-value      { color: var(--low); }
+  .stat-card.resolved .stat-value { color: var(--resolved); }
+  .stat-card.total .stat-value    { color: var(--text); }
+  .stat-card.score .stat-value    { color: var(--critical); }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ── Compliance bar ── */
+  .compliance-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .compliance-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+
+  .compliance-bar-wrap {
+    flex: 1;
+    min-width: 200px;
+    height: 8px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .compliance-bar-fill {
+    height: 100%;
+    width: 34%;
+    background: linear-gradient(90deg, var(--critical), var(--high));
+    border-radius: 99px;
+    transition: width 1.5s ease;
+  }
+
+  .compliance-score {
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--critical);
+  }
+
+  .compliance-note {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .meta-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+
+  .tab {
+    padding: 10px 20px;
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+
+  .tab:hover { color: var(--text); }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-count {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--border);
+    color: var(--muted);
+  }
+
+  .tab.active .tab-count {
+    background: rgba(0,212,255,0.15);
+    color: var(--accent);
+  }
+
+  /* ── Finding cards ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .finding-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .finding-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    border-radius: 0 10px 10px 0;
+    padding: 18px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .finding-card:hover {
+    border-color: var(--border);
+    border-left-color: inherit;
+    background: #141c24;
+  }
+
+  .finding-card.critical { border-left-color: var(--critical); }
+  .finding-card.high     { border-left-color: var(--high); }
+  .finding-card.medium   { border-left-color: var(--medium); }
+  .finding-card.low      { border-left-color: var(--low); }
+
+  .finding-card.resolved { opacity: 0.5; }
+
+  .finding-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .sev-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .sev-badge.CRITICAL { background: rgba(255,59,59,0.15); color: var(--critical); border: 1px solid rgba(255,59,59,0.3); }
+  .sev-badge.HIGH     { background: rgba(255,140,0,0.15); color: var(--high);     border: 1px solid rgba(255,140,0,0.3); }
+  .sev-badge.MEDIUM   { background: rgba(255,214,0,0.15); color: var(--medium);   border: 1px solid rgba(255,214,0,0.3); }
+  .sev-badge.LOW      { background: rgba(0,212,255,0.1);  color: var(--low);      border: 1px solid rgba(0,212,255,0.2); }
+
+  .finding-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .finding-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .finding-resource {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    word-break: break-all;
+  }
+
+  .finding-detail {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+
+  .finding-footer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .cis-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    padding: 2px 8px;
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 3px;
+  }
+
+  .remediation-toggle {
+    font-size: 11px;
+    color: var(--accent2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .remediation-box {
+    display: none;
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: rgba(0,255,136,0.04);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent2);
+    line-height: 1.7;
+  }
+
+  .remediation-box.open { display: block; }
+
+  .status-pill {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    padding: 2px 8px;
+    border-radius: 99px;
+    margin-left: auto;
+  }
+
+  .status-pill.OPEN     { background: rgba(255,59,59,0.1); color: var(--critical); }
+  .status-pill.RESOLVED { background: rgba(0,255,136,0.1); color: var(--resolved); }
+
+  /* ── Threat feed ── */
+  .threat-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .threat-row {
+    display: grid;
+    grid-template-columns: 80px 100px 1fr 130px;
+    gap: 16px;
+    align-items: start;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+  }
+
+  .threat-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    padding-top: 2px;
+  }
+
+  .threat-type {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .threat-type.BRUTE_FORCE   { background: rgba(255,59,59,0.1);  color: var(--critical); }
+  .threat-type.S3_EXFIL      { background: rgba(255,59,59,0.15); color: var(--critical); }
+  .threat-type.IAM_ANOMALY   { background: rgba(255,140,0,0.1);  color: var(--high); }
+  .threat-type.PORT_SCAN     { background: rgba(255,214,0,0.1);  color: var(--medium); }
+  .threat-type.CONFIG_CHANGE { background: rgba(0,212,255,0.08); color: var(--low); }
+  .threat-type.CRYPTO_MINING { background: rgba(255,140,0,0.15); color: var(--high); }
+
+  .threat-msg { color: var(--text); line-height: 1.5; }
+
+  .threat-geo {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .threat-ip {
+    font-size: 11px;
+    color: var(--accent);
+    margin-top: 4px;
+  }
+
+  /* ── Loading ── */
+  .loading {
+    text-align: center;
+    padding: 60px 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Scan button ── */
+  .scan-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 8px 20px;
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .scan-btn:hover {
+    background: rgba(0,212,255,0.15);
+    border-color: var(--accent);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .main { padding: 20px 16px; }
+    .threat-row { grid-template-columns: 1fr; gap: 6px; }
+    .meta-tags { margin-left: 0; }
+    .compliance-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡</div>
+    <div>
+      <div class="logo-text">CLOUD SECURITY DASHBOARD</div>
+      <div class="logo-sub">AWS POSTURE MONITOR — NIVEDHITHA KS</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+    <span id="last-scan-time">Loading...</span>
+    <button class="scan-btn" onclick="loadAll()">↻ REFRESH</button>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Summary Cards -->
+  <div class="section-label">SECURITY POSTURE OVERVIEW</div>
+  <div class="summary-grid" id="summary-grid">
+    <div class="loading"><div class="spinner"></div><br>Scanning AWS environment...</div>
+  </div>
+
+  <!-- Compliance bar -->
+  <div class="compliance-row" id="compliance-row" style="display:none">
+    <div>
+      <div class="compliance-label">CIS AWS BENCHMARK SCORE</div>
+      <div class="compliance-note">Based on 13 open findings across IAM, S3, EC2</div>
+    </div>
+    <div class="compliance-bar-wrap">
+      <div class="compliance-bar-fill" id="comp-bar"></div>
+    </div>
+    <div class="compliance-score" id="comp-score">--</div>
+    <div class="compliance-note">/100</div>
+    <div class="meta-tags" id="meta-tags"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('iam', this)">IAM <span class="tab-count" id="cnt-iam">--</span></button>
+    <button class="tab" onclick="showTab('s3', this)">S3 Buckets <span class="tab-count" id="cnt-s3">--</span></button>
+    <button class="tab" onclick="showTab('sg', this)">Security Groups <span class="tab-count" id="cnt-sg">--</span></button>
+    <button class="tab" onclick="showTab('threats', this)">Threat Feed <span class="tab-count" id="cnt-threats">--</span></button>
+  </div>
+
+  <!-- IAM Panel -->
+  <div class="panel active" id="panel-iam">
+    <div class="section-label">IAM MISCONFIGURATIONS</div>
+    <div class="finding-list" id="iam-list">
+      <div class="loading"><div class="spinner"></div><br>Scanning IAM policies...</div>
+    </div>
+  </div>
+
+  <!-- S3 Panel -->
+  <div class="panel" id="panel-s3">
+    <div class="section-label">S3 BUCKET EXPOSURE ANALYSIS</div>
+    <div class="finding-list" id="s3-list">
+      <div class="loading"><div class="spinner"></div><br>Checking bucket policies...</div>
+    </div>
+  </div>
+
+  <!-- Security Groups Panel -->
+  <div class="panel" id="panel-sg">
+    <div class="section-label">EC2 SECURITY GROUP MISCONFIGURATIONS</div>
+    <div class="finding-list" id="sg-list">
+      <div class="loading"><div class="spinner"></div><br>Scanning security group rules...</div>
+    </div>
+  </div>
+
+  <!-- Threat Feed Panel -->
+  <div class="panel" id="panel-threats">
+    <div class="section-label">REAL-TIME THREAT EVENTS</div>
+    <div class="threat-list" id="threats-list">
+      <div class="loading"><div class="spinner"></div><br>Fetching CloudTrail events...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function showTab(name, btn) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  function sevClass(s) { return s.toLowerCase(); }
+
+  function renderFindings(list, containerId, type) {
+    const el = document.getElementById(containerId);
+    if (!list.length) { el.innerHTML = '<div class="loading">No findings.</div>'; return; }
+
+    el.innerHTML = list.map(f => {
+      const resource = f.resource || f.bucket || f.group || '';
+      const extra = f.exposed_objects > 0
+        ? `<span style="color:var(--critical);font-family:var(--mono);font-size:11px">⚠ ${f.exposed_objects.toLocaleString()} objects exposed</span>`
+        : f.port ? `<span style="font-family:var(--mono);font-size:11px;color:var(--muted)">PORT: ${f.port}</span>` : '';
+      const cis = f.cis_control ? `<span class="cis-tag">${f.cis_control}</span>` : '';
+
+      return `
+      <div class="finding-card ${sevClass(f.severity)} ${f.status === 'RESOLVED' ? 'resolved' : ''}">
+        <div class="finding-top">
+          <span class="sev-badge ${f.severity}">${f.severity}</span>
+          <div class="finding-title">${f.issue}</div>
+          <span class="finding-id">${f.id}</span>
+        </div>
+        <div class="finding-resource">📍 ${resource}${f.region ? ' — ' + f.region : ''}</div>
+        <div class="finding-detail">${f.detail}</div>
+        <div class="finding-footer">
+          ${cis}
+          ${extra}
+          <span class="remediation-toggle" onclick="toggleRem(this)">▶ Show remediation</span>
+          <span class="status-pill ${f.status}">${f.status}</span>
+        </div>
+        <div class="remediation-box">✓ ${f.remediation}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderThreats(list) {
+    const el = document.getElementById('threats-list');
+    el.innerHTML = list.map(t => `
+      <div class="threat-row">
+        <div class="threat-time">${t.time}</div>
+        <div><span class="threat-type ${t.type}">${t.type.replace('_',' ')}</span></div>
+        <div class="threat-msg">${t.message}</div>
+        <div class="threat-geo">
+          ${t.geo}
+          <div class="threat-ip">${t.source_ip}</div>
+        </div>
+      </div>`).join('');
+    document.getElementById('cnt-threats').textContent = list.length;
+  }
+
+  function renderSummary(s) {
+    document.getElementById('summary-grid').innerHTML = `
+      <div class="stat-card total">
+        <div class="stat-label">TOTAL FINDINGS</div>
+        <div class="stat-value">${s.total_findings}</div>
+        <div class="stat-sub">${s.open} open · ${s.resolved} resolved</div>
+      </div>
+      <div class="stat-card critical">
+        <div class="stat-label">CRITICAL</div>
+        <div class="stat-value">${s.critical}</div>
+        <div class="stat-sub">Immediate action required</div>
+      </div>
+      <div class="stat-card high">
+        <div class="stat-label">HIGH</div>
+        <div class="stat-value">${s.high}</div>
+        <div class="stat-sub">Fix within 24 hours</div>
+      </div>
+      <div class="stat-card medium">
+        <div class="stat-label">MEDIUM</div>
+        <div class="stat-value">${s.medium}</div>
+        <div class="stat-sub">Scheduled remediation</div>
+      </div>
+      <div class="stat-card low">
+        <div class="stat-label">LOW</div>
+        <div class="stat-value">${s.low}</div>
+        <div class="stat-sub">Monitor & document</div>
+      </div>
+      <div class="stat-card score">
+        <div class="stat-label">COMPLIANCE</div>
+        <div class="stat-value">${s.compliance_score}%</div>
+        <div class="stat-sub">CIS AWS Benchmark</div>
+      </div>`;
+
+    // Compliance bar
+    document.getElementById('comp-score').textContent = s.compliance_score;
+    setTimeout(() => {
+      document.getElementById('comp-bar').style.width = s.compliance_score + '%';
+    }, 200);
+    document.getElementById('compliance-row').style.display = 'flex';
+
+    document.getElementById('meta-tags').innerHTML = s.regions_scanned.map(r =>
+      `<span class="tag">${r}</span>`).join('') +
+      s.services_checked.map(sv => `<span class="tag">${sv}</span>`).join('');
+
+    document.getElementById('last-scan-time').textContent = 'Last scan: ' + s.last_scan;
+  }
+
+  function toggleRem(el) {
+    const box = el.parentElement.nextElementSibling;
+    box.classList.toggle('open');
+    el.textContent = box.classList.contains('open') ? '▼ Hide remediation' : '▶ Show remediation';
+  }
+
+  async function loadAll() {
+    try {
+      const r = await fetch('/api/all');
+      const d = await r.json();
+
+      renderSummary(d.summary);
+      renderFindings(d.iam, 'iam-list', 'iam');
+      renderFindings(d.s3, 's3-list', 's3');
+      renderFindings(d.security_groups, 'sg-list', 'sg');
+      renderThreats(d.threats);
+
+      document.getElementById('cnt-iam').textContent = d.iam.length;
+      document.getElementById('cnt-s3').textContent = d.s3.length;
+      document.getElementById('cnt-sg').textContent = d.security_groups.length;
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  loadAll();
+</script>
+</body>
+</html>
